@@ -42,12 +42,12 @@ RUN wget -O /tmp/host-tools.tar.gz "$HOST_TOOLS_URL" \
 
 FROM base_apt AS golang
 
-ARG GO_VERSION=1.25.0
+ARG GO_VERSION=1.26.11
 # One sum for each architecture this image is built on. An architecture that is
 # not listed stops the build. A silent skip is the failure this whole change
 # exists to remove, so there is no fallback branch here.
-ARG GO_SHA256_AMD64=2852af0cb20a13139b3448992e69b868e50ed0f8a1e5940ee1de9e19a123b613
-ARG GO_SHA256_ARM64=05de75d6994a2783699815ee553bd5a9327d8b79991de36e38b66862782f54ae
+ARG GO_SHA256_AMD64=9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec
+ARG GO_SHA256_ARM64=6c2f29b458b5add0835f18b776f69c8881a6d88428f1484a6da55755e620757e
 
 USER root
 # The mapping is explicit because `uname -m` does not name what go.dev
