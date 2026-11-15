@@ -14,35 +14,35 @@ import installer "NanoKVM-Server/service/addons/install"
 // (settings/tailscale/install-help.tsx) links the same package.
 
 // Version is the pinned Tailscale release.
-const Version = "1.104.1"
+const Version = "1.104.7"
 
 // release is a variable only so the tests can serve their own file; nothing
-// else changes it. The package is 37,978,637 bytes, and the two binaries
-// 68,402,398 together.
+// else changes it. The package is 38,204,581 bytes, and the two binaries
+// 68,802,021 together.
 var release = installer.Manifest{
 	Name:    "tailscale",
 	Title:   "Tailscale",
 	Version: Version,
 	Licence: "BSD-3-Clause",
-	Source:  "https://github.com/tailscale/tailscale/tree/v1.104.1",
+	Source:  "https://github.com/tailscale/tailscale/tree/v1.104.7",
 	Artifact: installer.Artifact{
-		URL:      "https://pkgs.tailscale.com/stable/tailscale_1.104.1_riscv64.tgz",
-		SHA256:   "a434d46c212a22f7de897ce3573083739661e7afd7f0ca8b921105c6f966eb13",
-		Size:     37978637,
-		Unpacked: 68402398,
+		URL:      "https://pkgs.tailscale.com/stable/tailscale_1.104.7_riscv64.tgz",
+		SHA256:   "de8466ad6c96828671a2f57681da119293bac200597500d3fb30a7265e59bebb",
+		Size:     38204581,
+		Unpacked: 68802021,
 		Max:      64 << 20,
 		Format:   installer.FormatTarGz,
 		Members: []installer.Member{
 			{
-				Path:   "tailscale_1.104.1_riscv64/tailscale",
+				Path:   "tailscale_1.104.7_riscv64/tailscale",
 				Name:   "tailscale",
-				SHA256: "668c98e9390b194d72b73325814eb0b84f02682366f555b695c298509bdd0abc",
+				SHA256: "59e293a236713283976098e831b3178413637fd0a1e877fc5db6c72818a626e6",
 				Mode:   0o755,
 			},
 			{
-				Path:   "tailscale_1.104.1_riscv64/tailscaled",
+				Path:   "tailscale_1.104.7_riscv64/tailscaled",
 				Name:   "tailscaled",
-				SHA256: "657f77f8ce21bdc1cd2905f7793ee0754addebd8438393ddf43a6e59763670cd",
+				SHA256: "06fd4e86b258442b148cf4d7f17e294b29fd27e19f9e80c4bc2a16ad773e2003",
 				Mode:   0o755,
 			},
 		},

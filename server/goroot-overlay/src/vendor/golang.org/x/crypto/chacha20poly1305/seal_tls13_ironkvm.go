@@ -29,7 +29,10 @@ func (c *chacha20poly1305) SealTLS13(dst, nonce, plaintext []byte, contentType b
 	ret, out := sliceForAppend(dst, n+poly1305.TagSize)
 	ciphertext, tag := out[:n], out[n:]
 	if alias.InexactOverlap(out, plaintext) {
-		panic("chacha20poly1305: invalid buffer overlap")
+		panic("chacha20poly1305: invalid buffer overlap of output and input")
+	}
+	if alias.AnyOverlap(out, additionalData) {
+		panic("chacha20poly1305: invalid buffer overlap of output and additional data")
 	}
 
 	var polyKey [32]byte

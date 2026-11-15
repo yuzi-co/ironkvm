@@ -9,7 +9,7 @@ const addonDir = '/data/ironkvm/addons/tailscale/';
 const links = '/usr/bin/tailscale tailscale\n/usr/sbin/tailscaled tailscaled';
 // The package the server pins (server/service/extensions/tailscale/release.go),
 // so a hand install is the release the page would have installed.
-const pinnedPackage = 'https://pkgs.tailscale.com/stable/tailscale_1.104.1_riscv64.tgz';
+const pinnedPackage = 'https://pkgs.tailscale.com/stable/tailscale_1.104.7_riscv64.tgz';
 
 // InstallHelp is the manual install, shown when the install from the page
 // fails.

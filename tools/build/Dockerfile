@@ -7,13 +7,13 @@
 # `make app` does not perform it.
 FROM ubuntu:24.04
 
-ARG GO_VERSION=1.25.0
+ARG GO_VERSION=1.26.11
 ARG HOST_TOOLS_URL=https://sophon-file.sophon.cn/sophon-prod-s3/drive/23/03/07/16/host-tools.tar.gz
 # Both sums must stay equal to the ones in docker/Dockerfile. The two images
 # download the same two archives, and an image that verifies while the other
 # does not is the same hole with one more place to look for it.
 ARG HOST_TOOLS_SHA256=ff9a58e8e192b20ea42e1d729c42d2219523209706cb3f0cf134582f6c70f805
-ARG GO_SHA256_AMD64=2852af0cb20a13139b3448992e69b868e50ed0f8a1e5940ee1de9e19a123b613
+ARG GO_SHA256_AMD64=9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec
 
 # cmake builds the static libjpeg-turbo that support/sg2002/libkvm-v4l2 links
 # into libkvm.so for the mainline image.
