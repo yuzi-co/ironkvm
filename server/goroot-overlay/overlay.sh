@@ -109,9 +109,16 @@ here=$(cd "$(dirname "$0")" && pwd)
 goroot=$(go env GOROOT)
 xc=src/vendor/golang.org/x/crypto
 
-# sha256 of the toolchain files this overlay was written against (Go 1.25.0,
-# golang.org/x/crypto v0.39.0): the ones it replaces, and the ones whose
-# types and calling conventions the assembly relies on.
+# sha256 of the toolchain files this overlay is checked against (Go 1.26.11,
+# whose vendored golang.org/x/crypto is v0.46.1-0.20251210140736-7dacc380ba00):
+# the ones it replaces, and the ones whose types and calling conventions the
+# assembly relies on. Written against Go 1.25.0 and x/crypto v0.39.0. On the
+# move to 1.26.11 (ironkvm-dist#181) three of them had changed: conn.go, so the
+# overlay's copy is 1.26.11's with the same hook; cipher_suites.go, only in the
+# names of two TLS 1.2 suites; and chacha20poly1305_generic.go, which now also
+# refuses additional data that overlaps the output, a check SealTLS13 took.
+# Go 1.27 replaces the generic GHASH (ghash.go, gcmFieldElement) that
+# gcm_riscv64.go is built on, so that move is a port of the third part.
 check() {
     sum=$(sha256sum "$goroot/$1" | cut -d' ' -f1)
     if [ "$sum" != "$2" ]; then
@@ -127,11 +134,12 @@ check $xc/chacha20/chacha_generic.go 34403e82b1387b4402b00ce30c1364508c333f4bdbe
 check $xc/internal/poly1305/sum_asm.go ce5f94aedd0ce3349a8a8655607bd0159d354902e3298169cf9350fe235382b7
 check $xc/internal/poly1305/mac_noasm.go f5308cd6f14bab1b00963eeae8137d63fc5452db7f7d49276a56f457bfd89d2d
 check $xc/internal/poly1305/sum_generic.go b0094a2895d5bda42dcaaf57c0b31fc914c3b6c6aa6237aab0100a6d78346933
-check $xc/chacha20poly1305/chacha20poly1305_generic.go 5b949322cccac6e86a5fa721195de0f8aff949cf5c910fd5fe79cc825e22cb12
-check src/crypto/tls/conn.go f5178241bea60da9af09ef0dd317354cea88e6c37ada835d43eceae98b520e2a
-check src/crypto/tls/cipher_suites.go d407df31106c5989e29f84fb37403ca52f4bc6a583d821f4235915bdff4c07c1
-# Third part (AES-GCM), Go 1.25.0: the two files it replaces, and the ones
-# whose types, tables and generic functions the riscv64 code uses.
+check $xc/chacha20poly1305/chacha20poly1305_generic.go f3e04c8517e163f94ec2bb6e7b634ef239432ed7422b1d8695cfc446c8551181
+check src/crypto/tls/conn.go c5267d4cc54fef91f4346e82865bee81224599c080dd2c559b21e09dd1d7e7d6
+check src/crypto/tls/cipher_suites.go 6061822eaac77541fe38d46acdd4766eb70d2884f8bf84f3ce7f0471217ac73b
+# Third part (AES-GCM), unchanged from Go 1.25.0 to 1.26.11: the two files it
+# replaces, and the ones whose types, tables and generic functions the riscv64
+# code uses.
 fa=src/crypto/internal/fips140/aes
 check $fa/aes_noasm.go 8647ca404ea9300cce387f7d5419367f8c801e7e0c9a8dd263eb1f069a9e8b24
 check $fa/aes.go 3f7a470932a6f1e2bc9fa5f03be3a60f7c2edd557ec4a58ecb25fcab71b83ddc

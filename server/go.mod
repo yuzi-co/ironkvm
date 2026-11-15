@@ -1,12 +1,13 @@
 module NanoKVM-Server
 
-go 1.25.0
+go 1.26.11
 
 // The board has one core and no cgroup CPU limit that could change under the
-// server, so Go 1.25's once-a-second re-check of the CPU count and cgroup
-// limit for GOMAXPROCS has nothing to find. Trial 38 (#72) blamed it for 12%
-// of a WebRTC profile; trial 39 found no cost to measure either way, so this
-// only drops a pointless periodic check. GOMAXPROCS is still set at start.
+// server, so the once-a-second re-check of the CPU count and cgroup limit for
+// GOMAXPROCS, which Go has done since 1.25, has nothing to find. Trial 38 (#72)
+// blamed it for 12% of a WebRTC profile; trial 39 found no cost to measure
+// either way, so this only drops a pointless periodic check. GOMAXPROCS is
+// still set at start. Go 1.26.11 still has the setting (ironkvm-dist#181).
 godebug updatemaxprocs=0
 
 require (
@@ -33,11 +34,11 @@ require (
 	github.com/rs/cors/wrapper/gin v0.0.0-20260604061346-2f30c9cf7731
 	github.com/sirupsen/logrus v1.10.2
 	github.com/unrolled/secure v1.17.0
-	golang.org/x/crypto v0.55.0
-	golang.org/x/net v0.58.0
+	golang.org/x/crypto v0.59.0
+	golang.org/x/net v0.62.0
 	golang.org/x/oauth2 v0.36.0
-	golang.org/x/sys v0.47.0
-	golang.org/x/text v0.41.0
+	golang.org/x/sys v0.50.0
+	golang.org/x/text v0.44.0
 	golang.org/x/time v0.14.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
 	gopkg.in/yaml.v3 v3.0.1
@@ -54,7 +55,7 @@ require (
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.9 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
@@ -86,7 +87,7 @@ require (
 	github.com/wlynxg/anet v0.0.5 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/arch v0.8.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 )
