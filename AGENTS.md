@@ -49,7 +49,7 @@ outside a browser: no JSX, no `@/` imports other than `import type`, and no DOM 
 `tsconfig.json` leaves the tests out, because they import `node:test` and the app does not load
 Node's types.
 
-### Backend (`server/`, Go 1.25)
+### Backend (`server/`, Go 1.26)
 
 The device build is a RISC-V cross-compile and links against `libkvm` from `server/dl_lib` +
 `server/include`, so it does not build natively on a workstation.
@@ -132,7 +132,7 @@ heavy MaixCDK builder is only needed for an actual device build:
 
 ```shell
 docker run --rm --cpus=1 -v "$PWD:/repo" -v nanokvm-gomod:/go/pkg/mod -w /repo/server \
-  -e CGO_ENABLED=0 golang:1.25 go test -tags novision ./...
+  -e CGO_ENABLED=0 golang:1.26 go test -tags novision ./...
 ```
 
 `--cpus=1` is deliberate. The board has one core, and a suite that passes only with spare CPU hides
