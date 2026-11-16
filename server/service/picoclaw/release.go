@@ -32,16 +32,16 @@ type pinnedRelease struct {
 // Version is the pinned build: the fork's release tag on its commit,
 // <upstream>-ironkvm.N, which is also the `git describe` the binary
 // reports.
-const Version = "v0.3.1-ironkvm.1"
+const Version = "v0.3.1-ironkvm.2"
 
 // release is a variable only so the tests can serve their own archive;
 // nothing else changes it.
 var release = pinnedRelease{
-	URL:          "https://github.com/yuzi-co/picoclaw/releases/download/v0.3.1-ironkvm.1/picoclaw-v0.3.1-ironkvm.1-linux-riscv64.tar.gz",
-	SHA256:       "c3ca1a67549626e3f08260d54c13cb62cd1793c69e5fc0c1872c55d958a61294",
-	Size:         5986593,
+	URL:          "https://github.com/yuzi-co/picoclaw/releases/download/v0.3.1-ironkvm.2/picoclaw-v0.3.1-ironkvm.2-linux-riscv64.tar.gz",
+	SHA256:       "d93d2059e8ec7479737e97fe20b92123e2816b56e30d4e6e1dd890bdf4998308",
+	Size:         6069233,
 	Max:          32 << 20,
-	Dir:          "picoclaw-v0.3.1-ironkvm.1-linux-riscv64",
-	BinarySHA256: "500dffa82a467324da67d617ec7c7475ac15bdb8e34e7bd7b823ca579f5712a7",
-	BinarySize:   15401144,
+	Dir:          "picoclaw-v0.3.1-ironkvm.2-linux-riscv64",
+	BinarySHA256: "854337f3a7008538049f6965495299fac57d136d7f10de2eaaf48f64cdcb0158",
+	BinarySize:   15007906,
 }

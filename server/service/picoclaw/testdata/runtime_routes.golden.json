@@ -28,7 +28,7 @@
           "desired_running": false
         },
         "status": "not_installed",
-        "version": "v0.3.1-ironkvm.1"
+        "version": "v0.3.1-ironkvm.2"
       },
       "msg": "success"
     }
@@ -62,7 +62,7 @@
             "desired_running": false
           },
           "status": "not_installed",
-          "version": "v0.3.1-ironkvm.1"
+          "version": "v0.3.1-ironkvm.2"
         }
       },
       "message": "PicoClaw device control is not enabled"
@@ -97,7 +97,7 @@
           "desired_running": false
         },
         "status": "not_installed",
-        "version": "v0.3.1-ironkvm.1"
+        "version": "v0.3.1-ironkvm.2"
       },
       "msg": "success"
     }
@@ -137,7 +137,7 @@
             "updated_by": "system"
           },
           "status": "not_installed",
-          "version": "v0.3.1-ironkvm.1"
+          "version": "v0.3.1-ironkvm.2"
         }
       },
       "message": "picoclaw is not installed"
@@ -176,7 +176,7 @@
           "updated_by": "system"
         },
         "status": "not_installed",
-        "version": "v0.3.1-ironkvm.1"
+        "version": "v0.3.1-ironkvm.2"
       },
       "msg": "success"
     }
@@ -238,7 +238,7 @@
           "updated_by": "system"
         },
         "status": "not_installed",
-        "version": "v0.3.1-ironkvm.1"
+        "version": "v0.3.1-ironkvm.2"
       },
       "msg": "success"
     }
@@ -313,7 +313,7 @@
             "updated_by": "web"
           },
           "status": "stopped",
-          "version": "v0.3.1-ironkvm.1"
+          "version": "v0.3.1-ironkvm.2"
         }
       },
       "msg": "success"
@@ -351,7 +351,7 @@
           "updated_by": "web"
         },
         "status": "stopped",
-        "version": "v0.3.1-ironkvm.1"
+        "version": "v0.3.1-ironkvm.2"
       },
       "msg": "success"
     }
@@ -388,7 +388,7 @@
             "updated_by": "web"
           },
           "status": "stopped",
-          "version": "v0.3.1-ironkvm.1"
+          "version": "v0.3.1-ironkvm.2"
         }
       },
       "message": "PicoClaw device control is not enabled"
@@ -429,7 +429,7 @@
             "updated_by": "web"
           },
           "status": "not_installed",
-          "version": "v0.3.1-ironkvm.1"
+          "version": "v0.3.1-ironkvm.2"
         }
       },
       "msg": "success"
@@ -464,7 +464,7 @@
         "updated_by": "web"
       },
       "status": "not_installed",
-      "version": "v0.3.1-ironkvm.1"
+      "version": "v0.3.1-ironkvm.2"
     }
   },
   {
@@ -499,7 +499,7 @@
           "updated_by": "mcp_preempt"
         },
         "status": "not_installed",
-        "version": "v0.3.1-ironkvm.1"
+        "version": "v0.3.1-ironkvm.2"
       },
       "msg": "success"
     }

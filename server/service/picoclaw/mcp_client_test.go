@@ -34,7 +34,7 @@ func (h headerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 }
 
 // connectLikePicoClaw connects to the route the way the PicoClaw gateway
-// (yuzi-co/picoclaw v0.3.1-ironkvm.1, pkg/mcp/manager.go) does: the go-sdk
+// (yuzi-co/picoclaw v0.3.1-ironkvm.2, pkg/mcp/manager.go) does: the go-sdk
 // streamable client with the standalone SSE stream off, which is what its
 // "type": "http" server entry selects, and the URL on 127.0.0.1.
 func connectLikePicoClaw(t *testing.T, service *Service) *protocol.ClientSession {
