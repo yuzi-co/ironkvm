@@ -5,6 +5,7 @@ import { client, MessageEvent } from '@/lib/websocket.ts';
 import { inputRegionAtom, resolutionAtom } from '@/jotai/screen.ts';
 import { useScreenElement } from '@/hooks/useScreenElement.ts';
 
+import { onPageLeave } from './page-leave.ts';
 import { getScreenPosition } from './position.ts';
 
 // The gadget's touch screen takes two contacts, with IDs the host uses to
@@ -71,6 +72,10 @@ export const Touch = () => {
     target.addEventListener('lostpointercapture', handlePointerUp);
     target.addEventListener('contextmenu', disableEvent);
     target.addEventListener('click', disableEvent);
+
+    // A finger still down when the window loses focus or the tab is hidden is
+    // lifted, because its pointerup may never be delivered.
+    const stopPageLeave = onPageLeave(liftContacts);
 
     function getPosition(e: PointerEvent, clamp: boolean) {
       const position = getScreenPosition(
@@ -195,12 +200,19 @@ export const Touch = () => {
       }
     }
 
-    return () => {
-      // Leaving touch mode lifts every finger, or the host keeps one down.
+    // Lifts every finger on the host. The frame names each one with its tip
+    // up, and sendFrame then forgets them.
+    function liftContacts() {
       for (const contact of contacts.values()) {
         contact.down = false;
       }
       sendFrame();
+    }
+
+    return () => {
+      stopPageLeave();
+      // Leaving touch mode lifts every finger, or the host keeps one down.
+      liftContacts();
       if (keepAlive !== null) {
         clearInterval(keepAlive);
       }
