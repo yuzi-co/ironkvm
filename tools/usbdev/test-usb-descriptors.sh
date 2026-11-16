@@ -293,6 +293,55 @@ else
     note "only $lifted of $shipped top level functions were lifted" FAIL
 fi
 
+# --- the device class follows the functions --------------------------------
+
+echo
+echo "===== S03usbdev, device class ====="
+# 0xEF/0x02/0x01 only where a function announces an interface association.
+# EDK2 reads the interface classes only behind device class 0, so the class
+# has to be 0 whenever nothing needs the other one.
+class_is() {
+    is bDeviceClass    "$1" "$4: device class $1"
+    is bDeviceSubClass "$2" "$4: device subclass $2"
+    is bDeviceProtocol "$3" "$4: device protocol $3"
+}
+
+build_env
+: > "$work/boot/usb.disk0"
+run "$S03" start_usb_dev
+present configs/c.1/mass_storage.disk0 "the disk is linked for the class case"
+class_is 0x00 0x00 0x00 "HID and the disk"
+
+build_env
+: > "$work/boot/usb.uac"
+run "$S03" start_usb_dev
+class_is 0x00 0x00 0x00 "HID and the speaker"
+
+build_env
+: > "$work/boot/usb.acm"
+run "$S03" start_usb_dev
+present configs/c.1/acm.GS0 "the console is linked for the class case"
+class_is 0xEF 0x02 0x01 "the serial console"
+
+for class_net in ncm ecm rndis0
+do
+    build_env
+    : > "$work/boot/usb.$class_net"
+    run "$S03" start_usb_dev
+    class_is 0xEF 0x02 0x01 "the network as $class_net"
+done
+
+# The gadget directory outlives a restart, so a start that no longer carries
+# the network has to write the zeros itself.
+build_env
+: > "$work/boot/usb.ncm"
+run "$S03" start_usb_dev
+class_is 0xEF 0x02 0x01 "before the network is switched off"
+rm -f "$work/boot/usb.ncm"
+run "$S03" start_usb_host
+run "$S03" start_usb_dev
+class_is 0x00 0x00 0x00 "after the network is switched off"
+
 # --- normal mode, nothing switched on ------------------------------------
 
 echo
@@ -302,9 +351,9 @@ run "$S03" start_usb_dev
 
 is bcdUSB    0x0200 "the USB version is stated, not left to the kernel"
 is bcdDevice 0x0510 "the device version carries the HID mode flag"
-is bDeviceClass    0xEF "device class 0xEF, a composite device"
-is bDeviceSubClass 0x02 "device subclass 0x02"
-is bDeviceProtocol 0x01 "device protocol 0x01"
+is bDeviceClass    0x00 "device class 0, so firmware reads the keyboard's interface class"
+is bDeviceSubClass 0x00 "device subclass 0"
+is bDeviceProtocol 0x00 "device protocol 0"
 is idVendor  0x3346 "default vendor id"
 is idProduct 0x1009 "default product id"
 is strings/0x409/manufacturer sipeed  "manufacturer string"
