@@ -48,6 +48,10 @@ int main(int argc, char **argv)
 		fprintf(stderr, "%d\n", r);
 		return 0;
 	}
+	if (argc == 5 && strcmp(argv[1], "copy") == 0) {
+		printf("%d\n", copy_boot_script(argv[2], argv[3], argv[4]));
+		return 0;
+	}
 	if (argc == 5 && strcmp(argv[1], "wifi") == 0) {
 		static const char *names[] = { "install", "keep", "remove" };
 		printf("%s\n", names[s30wifi_action(argv[2], atoi(argv[3]), atoi(argv[4]))]);
@@ -145,15 +149,50 @@ check "mainline image: S00kmod and S15kvmhwd not installed" '[ ! -e "$etc/S00kmo
 check "mainline image: S01fs, S03usbdev, S30eth, S50sshd, S95nanokvm installed" \
     '[ "$(ls "$etc" | wc -l)" = 5 ]'
 
+echo "===== the copy replaces the script, it does not rewrite it ====="
+# cp -f opened the old script and wrote the new text into it. A shell running
+# that script reads on from its old offset in the new text, and a power cut
+# leaves it cut short. The copy has to arrive as a new file under the old name.
+src=$work/atomic-src; dst=$work/atomic-dst; mkdir -p "$src" "$dst"
+printf '#!/bin/sh\necho new\n' > "$src/S95nanokvm"; chmod 755 "$src/S95nanokvm"
+printf '#!/bin/sh\necho old\n' > "$dst/S95nanokvm"; chmod 700 "$dst/S95nanokvm"
+exec 9< "$dst/S95nanokvm"
+before=$(ls -i "$dst/S95nanokvm" | cut -d' ' -f1)
+check "the copy succeeds" '[ "$($T copy "$src" "$dst" S95nanokvm)" = 0 ]'
+after=$(ls -i "$dst/S95nanokvm" | cut -d' ' -f1)
+check "the name now holds the new text" 'cmp -s "$src/S95nanokvm" "$dst/S95nanokvm"'
+check "it is a new file, not the old one rewritten" '[ "$before" != "$after" ]'
+check "a reader of the old script still reads the old text" '[ "$(cat <&9 | tail -n 1)" = "echo old" ]'
+exec 9<&-
+check "the mode is the package's, not the old script's" '[ "$(stat -c %a "$dst/S95nanokvm")" = 755 ]'
+check "nothing else is left in the directory" '[ "$(ls -A "$dst")" = S95nanokvm ]'
+
+# A failed copy leaves the old script whole and no half-written name.
+printf '#!/bin/sh\necho old\n' > "$dst/S50sshd"
+check "a missing source fails" '[ "$($T copy "$src" "$dst" S50sshd | tail -n 1)" = -1 ]'
+check "and the old script is untouched" '[ "$(tail -n 1 "$dst/S50sshd")" = "echo old" ]'
+check "and no temporary file is left" '[ -z "$(ls -A "$dst" | grep -v "^S")" ]'
+# A temporary file left by a copy that died does not stop the next one.
+: > "$dst/.S95nanokvm.new"
+check "a stale temporary file does not block the copy" '[ "$($T copy "$src" "$dst" S95nanokvm)" = 0 ] && [ ! -e "$dst/.S95nanokvm.new" ]'
+if [ "$(id -u)" != 0 ]; then
+    ro=$work/atomic-ro; mkdir -p "$ro"; printf 'old\n' > "$ro/S95nanokvm"; chmod 555 "$ro"
+    check "a directory that cannot be written fails" '[ "$($T copy "$src" "$ro" S95nanokvm | tail -n 1)" = -1 ]'
+    check "and leaves the old script" '[ "$(cat "$ro/S95nanokvm")" = old ]'
+    chmod 755 "$ro"
+fi
+
 echo "===== the update path uses it ====="
 code=$(grep -v '^[[:space:]]*//' "$INIT")
 body=$(printf '%s\n' "$code" | sed -n '/^void new_app_init(void)/,/^}/p')
 check "new_app_init found" '[ -n "$body" ]'
-# The one direct copy left is S30wifi's, which s30wifi_action decides.
+# No boot script is copied by a shell command: cp -f writes into the script it
+# replaces. S30wifi is the one script s30wifi_action decides, so it goes
+# straight to copy_boot_script.
 n=$(printf '%s\n' "$body" | grep -c 'cp -f /kvmapp/system/init.d/')
-check "every other boot script goes through install_boot_script" '[ "$n" = 1 ]'
-check "that copy is S30wifi" \
-    'printf "%s\n" "$body" | grep "cp -f /kvmapp/system/init.d/" | grep -q "S30wifi /etc/init.d/"'
+check "no boot script is copied with cp -f" '[ "$n" = 0 ]'
+check "S30wifi through copy_boot_script" \
+    'printf "%s\n" "$body" | grep -q "copy_boot_script(pkg, etc, \"S30wifi\")"'
 for s in S00kmod S01fs S03usbdev S15kvmhwd S30eth S50sshd S95nanokvm S98tailscaled; do
     check "$s through install_boot_script" \
         'printf "%s\n" "$body" | grep -q "install_boot_script(refuse, pkg, etc, \"$s\")"'
