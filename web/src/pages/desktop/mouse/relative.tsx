@@ -10,6 +10,7 @@ import { resolutionAtom } from '@/jotai/screen.ts';
 import { useStableCallback } from '@/hooks/useStableCallback.ts';
 import { useScreenElement } from '@/hooks/useScreenElement.ts';
 
+import { onPageLeave } from './page-leave.ts';
 import { MouseRelativeEvent } from './types.ts';
 
 // disable default events
@@ -89,6 +90,8 @@ export const Relative = () => {
     target.addEventListener('touchmove', handleTouchMove, touchOptions);
     target.addEventListener('touchend', handleTouchEnd, touchOptions);
     target.addEventListener('touchcancel', handleTouchCancel, touchOptions);
+
+    const stopPageLeave = onPageLeave(releaseHeldButtons);
 
     // Mouse click event
     function handleMouseClick(event: MouseEvent) {
@@ -343,7 +346,28 @@ export const Relative = () => {
     }
 
     function handlePointerLockChange() {
+      const wasLocked = isLockedRef.current;
       isLockedRef.current = document.pointerLockElement === target;
+
+      // Without the lock the pointer is free to leave the screen, and a
+      // button released out there is not reported.
+      if (wasLocked && !isLockedRef.current) {
+        releaseHeldButtons();
+      }
+    }
+
+    // Lets go of every button the host still holds, from the mouse or from a
+    // touch gesture. The window losing focus, the tab being hidden and the
+    // pointer lock ending all come here.
+    function releaseHeldButtons() {
+      clearTouchLongPressTimer();
+      resetTouchState();
+
+      if (!mouse.hasPressedButtons) {
+        return;
+      }
+
+      client.send(new Uint8Array([MessageEvent.Mouse, ...mouse.reset()]));
     }
 
     // Mouse handler
@@ -405,6 +429,7 @@ export const Relative = () => {
     }
 
     return () => {
+      stopPageLeave();
       const release = mouse.reset();
       client.send(new Uint8Array([MessageEvent.Mouse, ...release]));
       target.removeEventListener('click', handleMouseClick);

@@ -7,6 +7,7 @@ import { scrollDirectionAtom, scrollIntervalAtom } from '@/jotai/mouse.ts';
 import { inputRegionAtom, resolutionAtom } from '@/jotai/screen.ts';
 import { useScreenElement } from '@/hooks/useScreenElement.ts';
 
+import { onPageLeave } from './page-leave.ts';
 import { getScreenPosition } from './position.ts';
 import { MouseAbsoluteEvent } from './types.ts';
 
@@ -83,6 +84,8 @@ export const Absolute = () => {
     target.addEventListener('touchmove', handleTouchMove, touchOptions);
     target.addEventListener('touchend', handleTouchEnd, touchOptions);
     target.addEventListener('touchcancel', handleTouchCancel, touchOptions);
+
+    const stopPageLeave = onPageLeave(releaseHeldButtons);
 
     // Mouse event handler
     function handleMouseEvent(event: MouseAbsoluteEvent) {
@@ -456,10 +459,35 @@ export const Absolute = () => {
       isLongPressRef.current = false;
     }
 
+    // Lets go of every button the host still holds, from the mouse or from a
+    // touch gesture. The window losing focus and the tab being hidden both end
+    // here, because the mouseup or touchend that would have released the
+    // button goes elsewhere once the page is not in front.
+    function releaseHeldButtons() {
+      clearLongPressTimer();
+      pressedMouseButtons.clear();
+      pressedButtonRef.current = null;
+      isDraggingRef.current = false;
+      isLongPressRef.current = false;
+
+      if (!mouse.hasPressedButtons) {
+        return;
+      }
+
+      flushMouseMove();
+      sendReport(mouse.reset(lastPosRef.current.x, lastPosRef.current.y));
+    }
+
     return () => {
+      stopPageLeave();
       if (moveFrame !== null) {
         cancelAnimationFrame(moveFrame);
       }
+      // A mode switch or a new screen element ends here. The report is sent
+      // whether or not a button is held, so the host is left in a known state.
+      pressedButtonRef.current = null;
+      isDraggingRef.current = false;
+      isLongPressRef.current = false;
       sendReport(mouse.reset(lastPosRef.current.x, lastPosRef.current.y));
       target.removeEventListener('mousemove', handleMouseMove);
       target.removeEventListener('mousedown', handleMouseDown);
