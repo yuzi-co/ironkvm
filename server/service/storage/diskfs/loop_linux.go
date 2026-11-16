@@ -42,9 +42,9 @@ func attachLoop(file string, offset, size int64, writable bool) (*loopDevice, er
 		mode = unix.O_RDWR
 	}
 
-	backing, err := unix.Open(file, mode|unix.O_CLOEXEC, 0)
+	backing, err := openBacking(file, mode)
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %w", file, err)
+		return nil, err
 	}
 	defer func() { _ = unix.Close(backing) }()
 
@@ -86,6 +86,23 @@ func attachLoop(file string, offset, size int64, writable bool) (*loopDevice, er
 		return &loopDevice{fd: fd, Path: path}, nil
 	}
 	return nil, fmt.Errorf("%w: no free loop device", ErrBusy)
+}
+
+// openBacking opens the image file a loop device is to serve, and refuses a
+// symbolic link in its place. The server runs as root, so a link under /data
+// that leads to a block device or to a file elsewhere would otherwise be
+// attached and, for a writable mount, written. Mount resolves the path before
+// it gets here, so a link the user made on purpose arrives as its target and
+// opens; what is refused is a link put in the image's place after that.
+func openBacking(file string, mode int) (int, error) {
+	fd, err := unix.Open(file, mode|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if errors.Is(err, unix.ELOOP) {
+		return -1, fmt.Errorf("open %s: it is a symbolic link: %w", file, err)
+	}
+	if err != nil {
+		return -1, fmt.Errorf("open %s: %w", file, err)
+	}
+	return fd, nil
 }
 
 // openLoop opens the loop device n, making its node if devtmpfs has not.
