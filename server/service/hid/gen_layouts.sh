@@ -12,7 +12,7 @@
 # read the diff of the two generated files before you commit it.
 set -eu
 
-IMAGE=golang:1.25.14@sha256:699337d620559a59b4a2bb298ad59611e535d2ee755a34cf2d2a98f37578dc80
+IMAGE=golang:1.26.11@sha256:957952ae74dc010608717144399a59a2c6e82ea03d63be1c7ff6577c5a135f93
 XKB_DATA_VERSION=2.42-1        # xkb-data, which is xkeyboard-config 2.42
 XKBCOMMON_VERSION=1.7.0-2      # libxkbcommon-dev
 X11_DATA_VERSION=2:1.8.12-1    # libx11-data, the compose tables
