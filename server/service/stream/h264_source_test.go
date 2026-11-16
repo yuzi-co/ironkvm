@@ -20,6 +20,31 @@ func withCapture(t *testing.T, read func(uint16, uint16, uint16) ([]byte, int)) 
 	}
 }
 
+// newTestSource makes a source whose loop is gone before the test's fakes
+// are.
+//
+// Close only takes a path out of the map, and the loop runs on to its next
+// tick before it sees that. A test that put readVideo and the other variables
+// back at once did so under a loop that still read them, and the next test
+// replaced them under it again, which the race detector reports. So this waits
+// for the loop to stop. Cleanups run last in, first out: call this after the
+// fakes are in place, and it runs before they are put back.
+func newTestSource(t *testing.T) *H264Source {
+	t.Helper()
+
+	source := newH264Source()
+	t.Cleanup(func() {
+		waitFor(t, "the capture loop to stop", func() bool {
+			source.mutex.Lock()
+			defer source.mutex.Unlock()
+
+			return !source.running
+		})
+	})
+
+	return source
+}
+
 func waitFor(t *testing.T, what string, condition func() bool) {
 	t.Helper()
 
@@ -44,7 +69,7 @@ func TestEverySubscriberSeesTheSameFrames(t *testing.T) {
 		return []byte{0x00, 0x00, 0x00, 0x01}, 3
 	})
 
-	source := newH264Source()
+	source := newTestSource(t)
 	first := source.subscribe(nil)
 	defer first.Close()
 	second := source.subscribe(nil)
@@ -78,7 +103,7 @@ func TestASubscriberThatTakesNothingDoesNotStopTheOthers(t *testing.T) {
 		return []byte{0x01}, 1
 	})
 
-	source := newH264Source()
+	source := newTestSource(t)
 	stalled := source.subscribe(nil)
 	defer stalled.Close()
 	live := source.subscribe(nil)
@@ -110,7 +135,7 @@ func TestNoSubscriberWantsAFrameSoNothingIsRead(t *testing.T) {
 		return []byte{0x01}, 1
 	})
 
-	source := newH264Source()
+	source := newTestSource(t)
 	var wanted atomic.Bool
 	subscription := source.subscribe(func() bool { return wanted.Load() })
 	defer subscription.Close()
@@ -133,7 +158,7 @@ func TestTheLoopStopsAfterTheLastSubscriberLeaves(t *testing.T) {
 		return []byte{0x01}, 1
 	})
 
-	source := newH264Source()
+	source := newTestSource(t)
 	subscription := source.subscribe(nil)
 	waitFor(t, "the loop to start", func() bool { return reads.Load() > 0 })
 
@@ -161,7 +186,7 @@ func TestASubscriberArrivingAfterTheStopStartsTheLoopAgain(t *testing.T) {
 		return []byte{0x01}, 1
 	})
 
-	source := newH264Source()
+	source := newTestSource(t)
 	first := source.subscribe(nil)
 	waitFor(t, "the first loop to start", func() bool { return reads.Load() > 0 })
 	first.Close()
@@ -183,7 +208,7 @@ func TestASubscriberArrivingAfterTheStopStartsTheLoopAgain(t *testing.T) {
 func TestClosingASubscriptionTwiceIsSafe(t *testing.T) {
 	withCapture(t, func(uint16, uint16, uint16) ([]byte, int) { return nil, -1 })
 
-	source := newH264Source()
+	source := newTestSource(t)
 	subscription := source.subscribe(nil)
 	subscription.Close()
 	subscription.Close()
@@ -195,7 +220,7 @@ func TestClosingASubscriptionTwiceIsSafe(t *testing.T) {
 func TestACaptureFailureIsDeliveredRatherThanSwallowed(t *testing.T) {
 	withCapture(t, func(uint16, uint16, uint16) ([]byte, int) { return nil, -1 })
 
-	source := newH264Source()
+	source := newTestSource(t)
 	subscription := source.subscribe(nil)
 	defer subscription.Close()
 
@@ -218,7 +243,7 @@ func TestTheFirstReadDoesNotWaitForATick(t *testing.T) {
 		return []byte{0x00, 0x00, 0x00, 0x01}, 3
 	})
 
-	source := newH264Source()
+	source := newTestSource(t)
 	start := time.Now()
 	subscription := source.subscribe(nil)
 	defer subscription.Close()
