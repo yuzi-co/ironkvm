@@ -3,13 +3,15 @@ package vm
 import (
 	"errors"
 	"os"
-	"os/exec"
+	"slices"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
 	"NanoKVM-Server/proto"
 	"NanoKVM-Server/service/hid"
+	"NanoKVM-Server/utils/atomicfile"
 )
 
 const (
@@ -219,12 +221,9 @@ func (s *Service) UpdateVirtualDevice(c *gin.Context) {
 		h.Unlock()
 	}()
 
-	for _, command := range commands {
-		err := exec.Command("sh", "-c", command).Run()
-		if err != nil {
-			rsp.ErrRsp(c, -3, "operation failed")
-			return
-		}
+	if err := runMarkerCommands(commands, runShell); err != nil {
+		rsp.ErrRsp(c, -3, "operation failed")
+		return
 	}
 
 	on, _ := isDeviceExist(device)
@@ -233,6 +232,49 @@ func (s *Service) UpdateVirtualDevice(c *gin.Context) {
 	})
 
 	log.Debugf("update virtual device %s success", req.Device)
+}
+
+// bootMarkerDir holds the markers S03usbdev reads to build the gadget.
+const bootMarkerDir = "/boot"
+
+// syncBootDir writes the marker directory to the card. Tests replace it.
+var syncBootDir = func() error { return atomicfile.SyncDir(bootMarkerDir) }
+
+// changesBootMarker reports whether a command creates or removes a marker.
+func changesBootMarker(command string) bool {
+	return strings.Contains(command, " "+bootMarkerDir+"/")
+}
+
+// syncBootMarkers makes the marker changes of commands survive a power cut.
+// /boot is FAT, which has no journal: a marker that touch made or rm removed
+// is only in the page cache until its directory is written. A power cut
+// before that brings the old state back, so a device the user turned off is
+// on again at the next boot, and one turned on comes up off.
+//
+// It runs for a list that failed part way too, because the commands before
+// the failure are not undone. A failed sync is logged and not returned: the
+// gadget already carries the change, and only its lasting is in doubt.
+func syncBootMarkers(commands []string) {
+	if !slices.ContainsFunc(commands, changesBootMarker) {
+		return
+	}
+	if err := syncBootDir(); err != nil {
+		log.Warnf("sync %s after a marker change: %s", bootMarkerDir, err)
+	}
+}
+
+// runMarkerCommands runs a per-device command list, stops at the first
+// command that fails, and then syncs /boot for the markers the list changed.
+func runMarkerCommands(commands []string, run func(string) error) error {
+	defer syncBootMarkers(commands)
+
+	for _, command := range commands {
+		if err := run(command); err != nil {
+			log.Errorf("usb gadget: %s: %s", command, err)
+			return err
+		}
+	}
+	return nil
 }
 
 func isDeviceExist(device string) (bool, error) {
