@@ -151,7 +151,7 @@ void new_app_init(void)
 	install_boot_script(refuse, pkg, etc, "S50sshd");
 	switch(s30wifi_action(refuse, vendor, kvm_wifi_exist())){
 	case S30WIFI_INSTALL:
-		system("cp -f /kvmapp/system/init.d/S30wifi /etc/init.d/");
+		copy_boot_script(pkg, etc, "S30wifi");
 		break;
 	case S30WIFI_KEEP:
 		printf("new_app_init: S30wifi left as this slot's image made it (%s does not refuse it)\n", refuse);

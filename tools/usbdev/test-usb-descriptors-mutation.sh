@@ -73,6 +73,15 @@ m_touchlen() { sed -i '/-e \/boot\/usb.touch \]/,/report_length/s/echo 7 >/echo 
 # The composite class triple. Wrong here and Windows binds one function.
 m_class() { sed -i 's|echo 0xEF > bDeviceClass|echo 0xEE > bDeviceClass|' "$1/S03usbdev"; }
 
+# The class no longer following the functions. Always 0xEF and EDK2 firmware
+# stops finding the keyboard; never 0xEF and Windows splits the network and
+# the console; the console forgotten and only the network is covered.
+m_classalways() { sed -i 's/^    usb_has "\$1" console || usb_has "\$1" network$/    return 0/' "$1/S03usbdev"; }
+m_classnever()  { sed -i 's/^    usb_has "\$1" console || usb_has "\$1" network$/    return 1/' "$1/S03usbdev"; }
+m_classnoacm()  { sed -i 's/^    usb_has "\$1" console || usb_has "\$1" network$/    usb_has "$1" network/' "$1/S03usbdev"; }
+m_classnonet()  { sed -i 's/^    usb_has "\$1" console || usb_has "\$1" network$/    usb_has "$1" console/' "$1/S03usbdev"; }
+m_classstale()  { sed -i '/^        echo 0x00 > bDeviceClass$/d' "$1/S03usbdev"; }
+
 # The absolute pointer declaring boot protocol. The boot mouse protocol carries
 # no absolute coordinates, so a host that takes the claim at face value gets
 # nonsense. This was the state of the shipped script once.
@@ -155,6 +164,11 @@ m_noclass() { sed -i '/^    echo 0x00 > bDeviceClass$/d' "$1/S03usbhid"; }
 echo "===== every mutation must be caught ====="
 try "keyboard report descriptor bytes"      m_desc
 try "composite device class"                m_class
+try "device class always 0xEF"              m_classalways
+try "device class never 0xEF"               m_classnever
+try "device class ignores the console"      m_classnoacm
+try "device class ignores the network"      m_classnonet
+try "device class zeros not written"        m_classstale
 try "touch contact count maximum"           m_touchmax
 try "touch report length"                   m_touchlen
 try "absolute pointer claims boot HID"      m_boot
