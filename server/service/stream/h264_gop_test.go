@@ -58,7 +58,7 @@ func TestTheEncoderIsToldTheGopAtTheStart(t *testing.T) {
 		return []byte{0x00, 0x00, 0x00, 0x01}, 3
 	})
 
-	source := newH264Source()
+	source := newTestSource(t)
 	subscription := source.subscribe(nil)
 	defer subscription.Close()
 
@@ -81,7 +81,7 @@ func TestAChangedGopReachesTheEncoder(t *testing.T) {
 		return []byte{0x00, 0x00, 0x00, 0x01}, 3
 	})
 
-	source := newH264Source()
+	source := newTestSource(t)
 	subscription := source.subscribe(nil)
 	defer subscription.Close()
 
@@ -113,7 +113,7 @@ func TestAnUnchangedGopIsNotRepeated(t *testing.T) {
 		return []byte{0x00, 0x00, 0x00, 0x01}, 3
 	})
 
-	source := newH264Source()
+	source := newTestSource(t)
 	subscription := source.subscribe(nil)
 	defer subscription.Close()
 

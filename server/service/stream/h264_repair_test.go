@@ -219,7 +219,7 @@ func TestAPathFurtherBehindThanTheSlotStillRepairs(t *testing.T) {
 func TestTheSourceGivesEachPathTheDeeperSlot(t *testing.T) {
 	withCapture(t, func(uint16, uint16, uint16) ([]byte, int) { return nil, -1 })
 
-	subscription := newH264Source().subscribe(func() bool { return false })
+	subscription := newTestSource(t).subscribe(func() bool { return false })
 	defer subscription.Close()
 
 	if got := cap(subscription.Frames()); got != h264SubscriptionDepth {
