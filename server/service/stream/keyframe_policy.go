@@ -36,8 +36,10 @@ import (
 //     viewer's last loss, or when it leaves.
 //
 // The encoder serves every viewer, so the most demanding one decides. H.264
-// Direct and MJPEG run over TCP and lose nothing: they only ask on joining or
-// after their own queue gave up frames, and never make the stream lossy.
+// Direct and MJPEG run over TCP and lose nothing: they only ask on joining,
+// after their own queue gave up frames, or after the encoder went on for
+// another path while they took nothing (H264Subscription.miss), and never
+// make the stream lossy.
 //
 // Where the library cannot be asked for a keyframe, the GOP setting stays the
 // encoder's GOP, capped at keyframeFallbackInterval, and nothing is forced.
