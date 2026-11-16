@@ -54,6 +54,9 @@ type H264Source struct {
 // able to say so: with every subscriber quiet the source reads nothing at all,
 // which is what kept an idle board off the encoder before this existed.
 //
+// A path that is quiet while another one asks misses the frames read
+// meanwhile, and is held back to a keyframe when it asks again (miss).
+//
 // It runs on the capture goroutine, and both paths share that goroutine now.
 // So demand must not block, must not write to a socket, and must not take a
 // lock that anything holds across a write. One path that broke this rule would
@@ -70,12 +73,17 @@ type H264Subscription struct {
 	demand func() bool
 	once   sync.Once
 
-	// repairing is read and written by deliver and by nothing else, and
-	// deliver runs only on the capture goroutine. subscribe and remove hold
+	// repairing is read and written by deliver and miss and by nothing else,
+	// and both run only on the capture goroutine. subscribe and remove hold
 	// the source mutex, so a subscription is in the map before the loop can
 	// reach it and out of the map before the next tick. That is why this needs
 	// no lock of its own, and it is why it must not grow a second writer.
 	repairing bool
+
+	// missed says a picture was read while this path had no demand, and that
+	// the keyframe this calls for has not been asked for yet. It belongs to
+	// the capture goroutine as repairing does (miss and resume).
+	missed bool
 }
 
 // h264SubscriptionDepth is how many frames a delivery path may fall behind the
@@ -247,6 +255,39 @@ func (p *H264Subscription) deliver(frame H264Frame) {
 	}
 }
 
+// miss records that the encoder moved on by a picture this path did not ask
+// for, because another path did.
+//
+// The path is not handed the frame, and nothing is copied or queued for it,
+// but it has a gap all the same: the next delta frame is coded against this
+// one. H.264 Direct stops asking while its viewer's flow window is full, and
+// with a WebRTC viewer or the egress tap beside it the encoder kept going, so
+// that viewer was sent a delta frame whose reference it never got and showed
+// a broken picture until the next keyframe, which by default comes only on
+// request (ironkvm-dist#191). The stream is held back to a keyframe instead,
+// as after a refused frame in deliver.
+//
+// No keyframe is asked for here. The path could not take it now, and one
+// request per missed frame would be a request every tick. resume asks once.
+func (p *H264Subscription) miss() {
+	p.repairing = true
+	p.missed = true
+}
+
+// resume runs when the path has demand again, before the read. It asks for
+// the keyframe a missed picture calls for, once for the whole spell without
+// demand. The request goes through the policy like every other, so a path
+// that stops and starts over and over gets a keyframe at most every
+// keyframeMinGap and no more often than any other waiting viewer.
+func (p *H264Subscription) resume() {
+	if !p.missed {
+		return
+	}
+
+	p.missed = false
+	RequestKeyframe(KeyframeReasonWaiting)
+}
+
 // Close leaves the capture loop. It is safe to call more than once.
 func (p *H264Subscription) Close() {
 	p.once.Do(func() {
@@ -381,12 +422,20 @@ func (s *H264Source) run() {
 
 		// Ask before reading. A read costs the encoder whether or not anyone
 		// takes the frame.
-		wanted := subscribers[:0:0]
-		for _, subscription := range subscribers {
-			if subscription.demand() {
-				wanted = append(wanted, subscription)
+		//
+		// The snapshot is this tick's own slice, so it is sorted in place:
+		// the paths that want the frame first, the quiet ones after them.
+		asking := 0
+		for i, subscription := range subscribers {
+			if !subscription.demand() {
+				continue
 			}
+
+			subscription.resume()
+			subscribers[i], subscribers[asking] = subscribers[asking], subscription
+			asking++
 		}
+		wanted, quiet := subscribers[:asking], subscribers[asking:]
 
 		if len(wanted) == 0 {
 			pacer.read(time.Time{}, 0)
@@ -430,6 +479,12 @@ func (s *H264Source) run() {
 
 		if !got {
 			continue
+		}
+
+		// The encoder has moved on, so a path that did not ask has a gap. A
+		// failed read made no picture and leaves none.
+		for _, subscription := range quiet {
+			subscription.miss()
 		}
 
 		lat.add(frame, time.Now())

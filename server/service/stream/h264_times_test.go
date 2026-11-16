@@ -34,7 +34,7 @@ func TestFramesCarryTheCaptureTimes(t *testing.T) {
 		}, true
 	}
 
-	source := newH264Source()
+	source := newTestSource(t)
 	subscription := source.subscribe(nil)
 	defer subscription.Close()
 
