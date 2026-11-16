@@ -24,13 +24,27 @@
 // Whether the list names the script. A missing list refuses nothing.
 int slot_refuses(const char *list, const char *name);
 
-// Copies src_dir/name into dest_dir with cp -f, unless the list refuses it,
-// which is reported on stdout. Answers 1 when it ran the copy, 0 when not.
+// Puts a copy of src_dir/name at dest_dir/name, with the source's mode.
+//
+// The copy is written under another name in dest_dir, synced, and renamed over
+// the script. cp -f wrote into the existing file instead, and the script being
+// replaced can be running: S95nanokvm restarts the service that runs this
+// update. The shell reads a script as it goes, so it went on from the same
+// offset in different text, and a power cut left a script cut short. With the
+// rename a running shell keeps the old file, and the name is always either
+// the old script or the whole new one. The temporary name starts with a dot,
+// so rcS's S??* never runs it.
+//
+// Answers 0, or -1 with the reason on stdout and the old script untouched.
+int copy_boot_script(const char *src_dir, const char *dest_dir, const char *name);
+
+// copy_boot_script, unless the list refuses the script, which is reported on
+// stdout. Answers 1 when it tried the copy, 0 when not.
 int install_boot_script(const char *list, const char *src_dir,
 			const char *dest_dir, const char *name);
 
 enum s30wifi_action {
-	S30WIFI_INSTALL,	// cp -f the package's S30wifi
+	S30WIFI_INSTALL,	// copy_boot_script the package's S30wifi
 	S30WIFI_KEEP,		// leave /etc/init.d/S30wifi as the image made it
 	S30WIFI_REMOVE,		// rm -f /etc/init.d/S30wifi
 };
