@@ -239,7 +239,12 @@ func selectionCommands(wanted usbSelection, current usbSelection, subnetChanged 
 // That differs from the per-device lists in one way. Those stop at the first
 // failure, start included, and depend on every step being unable to fail
 // (rm -f) to reach start. Here start runs regardless.
+//
+// /boot is synced at the end whatever happened, so the markers that did
+// change survive a power cut.
 func runRebuild(commands []string, run func(string) error) error {
+	defer syncBootMarkers(commands)
+
 	var failed error
 
 	for i, command := range commands {

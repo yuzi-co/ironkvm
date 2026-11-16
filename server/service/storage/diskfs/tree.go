@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"NanoKVM-Server/utils"
@@ -213,8 +214,39 @@ func (t *tree) Write(rel string, r io.Reader) (int64, error) {
 		_ = t.root.Remove(tempName)
 		return 0, err
 	}
+	// The file's bytes are synced above. Its name is not on the card until
+	// the directory is.
+	t.syncDirOf(name)
 
 	return written, nil
+}
+
+// syncDir writes a directory of the tree to its medium. Tests replace it.
+var syncDir = func(root *os.Root, name string) error {
+	dir, err := root.Open(name)
+	if err != nil {
+		return err
+	}
+	err = dir.Sync()
+	if closeErr := dir.Close(); err == nil {
+		err = closeErr
+	}
+	return err
+}
+
+// syncDirOf makes a change to the entry name survive a power cut, by syncing
+// the directory that holds it. FAT and exFAT have no journal, so without this
+// a power cut before the writeback rolls the entry back: a deleted file is
+// there again, and an uploaded one is gone. For a mounted image the sync also
+// reaches the image file on /data, because the loop device passes the flush
+// on to its backing file.
+//
+// A failure is logged and not returned. The change is already done in the
+// running system, so the caller can only be told that it may not last.
+func (t *tree) syncDirOf(name string) {
+	if err := syncDir(t.root, path.Dir(name)); err != nil {
+		logrus.Warnf("sync the directory of %s: %s", name, err)
+	}
 }
 
 // Remove deletes a file, or a directory with everything it holds: the web UI
@@ -236,7 +268,11 @@ func (t *tree) Remove(rel string) error {
 	if _, err := t.root.Lstat(name); err != nil {
 		return err
 	}
-	return t.root.RemoveAll(name)
+	if err := t.root.RemoveAll(name); err != nil {
+		return err
+	}
+	t.syncDirOf(name)
+	return nil
 }
 
 func (t *tree) StatFS() (total, available uint64, err error) {
