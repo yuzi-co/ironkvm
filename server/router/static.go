@@ -63,12 +63,29 @@ func serveFiles(webPath string) gin.HandlerFunc {
 	}
 }
 
-// cacheControlFor picks a caching policy from the request path alone, so it
-// applies whichever branch below ends up answering.
-func cacheControlFor(urlPath string) string {
+// cacheControlFor picks a caching policy before any branch below answers, so
+// it applies whichever one does.
+//
+// The path alone is not enough. A name under assets/ that no file answers to
+// gets a 404, or whatever a later route makes of it, and a browser told to
+// keep that for a year keeps the failure: a page loaded in the middle of an
+// update asks for the new build's script, gets a 404 from the old one, and
+// never asks again. Only a file that is there is immutable.
+func cacheControlFor(webPath string, urlPath string) string {
 	clean := path.Clean("/" + strings.TrimPrefix(urlPath, "/"))
-	if strings.HasPrefix(clean, assetsPrefix) {
-		return immutableCache
+	if !strings.HasPrefix(clean, assetsPrefix) {
+		return noCache
+	}
+
+	target, ok := resolveWebFile(webPath, urlPath)
+	if !ok {
+		return noCache
+	}
+	// The build may keep only the compressed copy of a file.
+	for _, name := range []string{target, target + gzipSuffix} {
+		if info, err := os.Stat(name); err == nil && info.Mode().IsRegular() {
+			return immutableCache
+		}
 	}
 
 	return noCache
