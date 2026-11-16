@@ -52,6 +52,14 @@ var (
 	validISOFilename      = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 )
 
+// syncFile writes a transferred image's bytes to the card. Tests replace it
+// to see what is synced, and when.
+var syncFile = func(file *os.File) error { return file.Sync() }
+
+// installImage gives a stored transfer its name, for an image no drive check
+// applies to. Tests replace it.
+var installImage = storage.InstallImage
+
 type Service struct {
 	downloadMutex      sync.Mutex
 	downloadCancel     context.CancelFunc
@@ -342,10 +350,20 @@ func (s *Service) DownloadImageFile(c *gin.Context) {
 			copyErr = errNotEnoughSpace
 		}
 		lw.stopTicker()
+		// The bytes go to the card before the rename gives them the image's
+		// name, or a power cut could leave that name on a file with holes.
+		// No lock is held here: the sync of a large image takes long. A
+		// failed copy, or one with the wrong checksum, is removed below and
+		// needs no sync.
+		checksumOK := expectedSHA256 == nil || bytes.Equal(hasher.Sum(nil), expectedSHA256)
+		var syncErr error
+		if copyErr == nil && checksumOK {
+			syncErr = syncFile(out)
+		}
 		partCloseErr := part.Close()
 		outCloseErr := out.Close()
-		if copyErr != nil || partCloseErr != nil || outCloseErr != nil {
-			log.Errorf("write uploaded image %q failed: %s", filename, errors.Join(copyErr, partCloseErr, outCloseErr))
+		if copyErr != nil || syncErr != nil || partCloseErr != nil || outCloseErr != nil {
+			log.Errorf("write uploaded image %q failed: %s", filename, errors.Join(copyErr, syncErr, partCloseErr, outCloseErr))
 			if errors.Is(copyErr, errNotEnoughSpace) {
 				rsp.ErrRsp(c, -1, errNotEnoughSpace.Error())
 			} else {
@@ -354,14 +372,14 @@ func (s *Service) DownloadImageFile(c *gin.Context) {
 			return
 		}
 
-		if expectedSHA256 != nil && !bytes.Equal(hasher.Sum(nil), expectedSHA256) {
+		if !checksumOK {
 			finalStatus = downloadStatusChecksumFailed
 			rsp.ErrRsp(c, -1, errSHA256Mismatch.Error())
 			return
 		}
 
 		outPath := filepath.Join(imageDir, filename)
-		if err := os.Rename(tempPath, outPath); err != nil {
+		if err := installImage(tempPath, outPath); err != nil {
 			rsp.ErrRsp(c, -1, "cannot install uploaded image")
 			return
 		}
@@ -411,7 +429,7 @@ func (s *Service) DownloadImage(c *gin.Context) {
 		return
 	}
 
-	s.startRemoteDownload(c, req.File, expectedSHA256, os.Rename)
+	s.startRemoteDownload(c, req.File, expectedSHA256, installImage)
 }
 
 // DownloadBootMenu downloads the netboot.xyz ISO into the image directory, for
@@ -467,7 +485,8 @@ func fileHasSHA256(path string, want []byte) bool {
 
 // startRemoteDownload starts the download of an image in the background and
 // answers with its status, which the page then polls.
-// install moves the verified download to its name.
+// install moves the verified download to its name and syncs the directory;
+// the download's bytes are synced before it is called.
 func (s *Service) startRemoteDownload(c *gin.Context, rawURL string, expectedSHA256 []byte, install func(tmp, dest string) error) {
 	var rsp proto.Response
 
@@ -581,6 +600,14 @@ func (s *Service) downloadRemoteImage(
 		copyErr = errNotEnoughSpace
 	}
 	lw.stopTicker()
+	// As for an upload: the bytes go to the card before install names them,
+	// and outside the lock install may take. A download that was cancelled,
+	// failed or has the wrong checksum is removed on return and needs no sync.
+	checksumOK := expectedSHA256 == nil || bytes.Equal(hasher.Sum(nil), expectedSHA256)
+	var syncErr error
+	if copyErr == nil && ctx.Err() == nil && checksumOK {
+		syncErr = syncFile(tempFile)
+	}
 	closeErr := tempFile.Close()
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -588,11 +615,14 @@ func (s *Service) downloadRemoteImage(
 	if copyErr != nil {
 		return fmt.Errorf("save downloaded image failed: %w", copyErr)
 	}
+	if syncErr != nil {
+		return fmt.Errorf("sync downloaded image failed: %w", syncErr)
+	}
 	if closeErr != nil {
 		return fmt.Errorf("close downloaded image failed: %w", closeErr)
 	}
 
-	if expectedSHA256 != nil && !bytes.Equal(hasher.Sum(nil), expectedSHA256) {
+	if !checksumOK {
 		return errSHA256Mismatch
 	}
 	if ctx.Err() != nil {
