@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/netip"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -376,12 +375,9 @@ func (s *Service) SetUSBNetwork(c *gin.Context) {
 		h.Unlock()
 	}()
 
-	for _, command := range usbNetworkCommands(req.Mode) {
-		if err := exec.Command("sh", "-c", command).Run(); err != nil {
-			log.Errorf("usb network: %s: %s", command, err)
-			rsp.ErrRsp(c, -3, "operation failed")
-			return
-		}
+	if err := runMarkerCommands(usbNetworkCommands(req.Mode), runShell); err != nil {
+		rsp.ErrRsp(c, -3, "operation failed")
+		return
 	}
 
 	rsp.OkRspWithData(c, usbNetworkState(markerPresent, os.ReadFile))

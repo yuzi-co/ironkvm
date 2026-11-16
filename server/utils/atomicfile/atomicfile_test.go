@@ -88,3 +88,16 @@ func TestWriteFileCleansUpWhenTheRenameFails(t *testing.T) {
 		t.Fatalf("target holds %v, want it untouched", names)
 	}
 }
+
+func TestSyncDirSyncsADirectoryAndReportsAMissingOne(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a"), []byte("a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := SyncDir(dir); err != nil {
+		t.Fatalf("sync of a directory: %s", err)
+	}
+	if err := SyncDir(filepath.Join(dir, "missing")); !os.IsNotExist(err) {
+		t.Fatalf("sync of a missing directory: %v", err)
+	}
+}

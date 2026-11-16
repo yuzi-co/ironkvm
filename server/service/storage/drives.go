@@ -10,8 +10,11 @@ import (
 	"sync"
 	"syscall"
 
+	log "github.com/sirupsen/logrus"
+
 	"NanoKVM-Server/proto"
 	"NanoKVM-Server/utils"
+	"NanoKVM-Server/utils/atomicfile"
 )
 
 // The two virtual drives. Each is one LUN of the gadget's mass storage
@@ -310,10 +313,42 @@ func insertLocked(id string, file string, ro bool, resolve func(string) (string,
 // errImageLoaded is wrapped with the drive that holds the image.
 var errImageLoaded = errors.New("the image is loaded")
 
+// syncDir writes a directory to its medium. Tests replace it to see which
+// directory is synced, and that no drive lock is held meanwhile.
+var syncDir = atomicfile.SyncDir
+
+// syncImageDir makes a change to the entry of the image file survive a power
+// cut: its creation, its removal, or a rename over it. /data is exFAT, which
+// has no journal, so without this a power cut before the writeback rolls the
+// entry back and a deleted image is there again after the reboot.
+//
+// The caller must not hold driveMu. The sync flushes the whole card and can
+// take long, and every insert, eject and file browser request waits on that
+// lock.
+//
+// A failure is logged and not returned. The change is already done in the
+// running system, so the caller can only be told that it may not last.
+func syncImageDir(file string) {
+	dir := filepath.Dir(file)
+	if err := syncDir(dir); err != nil {
+		log.Warnf("sync %s after a change to %s: %s", dir, filepath.Base(file), err)
+	}
+}
+
 // removeImage deletes an image unless a drive is serving it. Removing it would
-// pull the medium out from under the host. The lock keeps an insert from
-// loading it between the check and the remove.
+// pull the medium out from under the host. The directory is synced once the
+// lock is released, so the image stays deleted after a power cut.
 func removeImage(file string) error {
+	if err := removeImageLocked(file); err != nil {
+		return err
+	}
+	syncImageDir(file)
+	return nil
+}
+
+// removeImageLocked is the remove under the lock, which keeps an insert from
+// loading the image between the check and the remove.
+func removeImageLocked(file string) error {
 	driveMu.Lock()
 	defer driveMu.Unlock()
 
@@ -347,9 +382,21 @@ func imageInUse(file string) error {
 	return nil
 }
 
-// replaceImage renames src over the image file unless a drive serves file.
-// The lock keeps an insert from loading it between the check and the rename.
+// replaceImage renames src over the image file unless a drive serves file,
+// and syncs the directory once the lock is released, so the new name survives
+// a power cut. The caller has synced the bytes of src: this makes only the
+// name last.
 func replaceImage(src, file string) error {
+	if err := replaceImageLocked(src, file); err != nil {
+		return err
+	}
+	syncImageDir(file)
+	return nil
+}
+
+// replaceImageLocked is the rename under the lock, which keeps an insert from
+// loading the image between the check and the rename.
+func replaceImageLocked(src, file string) error {
 	driveMu.Lock()
 	defer driveMu.Unlock()
 

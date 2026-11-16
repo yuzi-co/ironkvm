@@ -351,3 +351,95 @@ func TestStatFSReportsTheFilesystem(t *testing.T) {
 		t.Errorf("StatFS = %d total, %d free", total, free)
 	}
 }
+
+// recordSyncs replaces syncDir with one that records each directory, checks
+// with seen that the change is already made, and then syncs for real.
+func recordSyncs(t *testing.T, seen func()) *[]string {
+	t.Helper()
+	var dirs []string
+	old := syncDir
+	syncDir = func(root *os.Root, name string) error {
+		if seen != nil {
+			seen()
+		}
+		dirs = append(dirs, name)
+		return old(root, name)
+	}
+	t.Cleanup(func() { syncDir = old })
+	return &dirs
+}
+
+func TestWriteSyncsTheDirectoryAfterTheRename(t *testing.T) {
+	image, dir := openTestDir(t, true)
+	mustWrite(t, filepath.Join(dir, "docs", "old.txt"), "x")
+	dirs := recordSyncs(t, func() {
+		if _, err := os.Stat(filepath.Join(dir, "docs", "new.txt")); err != nil {
+			t.Errorf("the sync ran before the rename: %s", err)
+		}
+	})
+
+	if _, err := image.Write("/docs/new.txt", strings.NewReader("new")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := image.Write("top.txt", strings.NewReader("top")); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(*dirs, ","); got != "docs,." {
+		t.Fatalf("synced %q, want %q", got, "docs,.")
+	}
+}
+
+func TestAFailedWriteSyncsNothing(t *testing.T) {
+	image, dir := openTestDir(t, true)
+	mustWrite(t, filepath.Join(dir, "taken.txt"), "x")
+	dirs := recordSyncs(t, nil)
+
+	if _, err := image.Write("taken.txt", strings.NewReader("new")); err == nil {
+		t.Fatal("an existing name was written")
+	}
+	if len(*dirs) != 0 {
+		t.Fatalf("synced %v", *dirs)
+	}
+}
+
+func TestRemoveSyncsTheParentDirectory(t *testing.T) {
+	image, dir := openTestDir(t, true)
+	mustWrite(t, filepath.Join(dir, "docs", "sub", "a.txt"), "a")
+	mustWrite(t, filepath.Join(dir, "top.txt"), "top")
+	dirs := recordSyncs(t, nil)
+
+	if err := image.Remove("/docs/sub"); err != nil {
+		t.Fatal(err)
+	}
+	if err := image.Remove("top.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(*dirs, ","); got != "docs,." {
+		t.Fatalf("synced %q, want %q", got, "docs,.")
+	}
+
+	if err := image.Remove("missing.txt"); err == nil {
+		t.Fatal("a remove of nothing succeeded")
+	}
+	if len(*dirs) != 2 {
+		t.Fatalf("a failed remove synced: %v", *dirs)
+	}
+}
+
+// A sync the filesystem refuses does not undo a change that is made.
+func TestAFailedSyncDoesNotFailTheChange(t *testing.T) {
+	image, dir := openTestDir(t, true)
+	old := syncDir
+	syncDir = func(*os.Root, string) error { return errors.New("input/output error") }
+	t.Cleanup(func() { syncDir = old })
+
+	if _, err := image.Write("a.txt", strings.NewReader("a")); err != nil {
+		t.Fatalf("write: %s", err)
+	}
+	if err := image.Remove("a.txt"); err != nil {
+		t.Fatalf("remove: %s", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "a.txt")); !os.IsNotExist(err) {
+		t.Fatalf("the file is still there: %v", err)
+	}
+}
