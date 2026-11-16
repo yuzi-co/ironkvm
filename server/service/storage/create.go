@@ -130,6 +130,9 @@ func (s *Service) CreateImage(c *gin.Context) {
 		respondFileError(c, err)
 		return
 	}
+	// Both makers sync the image's bytes. The name is not on the card until
+	// its directory is.
+	syncImageDir(path)
 
 	rsp.OkRspWithData(c, &proto.CreateImageRsp{File: path})
 	log.Infof("created %s: %d KiB, %s", path, req.Size>>10, fsType)

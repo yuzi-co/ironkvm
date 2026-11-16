@@ -33,12 +33,24 @@ func ImageInUse(file string) error {
 
 // ReplaceImage renames src over the image file, and refuses with
 // ErrImageLoaded while a drive serves file: the host would see its medium
-// change under it.
+// change under it. The directory is then synced, so the new name survives a
+// power cut. The caller syncs the bytes of src first, outside any lock.
 func ReplaceImage(src, file string) error {
 	if hidOnly() {
-		return os.Rename(src, file)
+		return InstallImage(src, file)
 	}
 	return replaceImage(src, file)
+}
+
+// InstallImage renames src to the image file with no drive check, for a
+// caller that knows no drive can serve file, and syncs the directory so the
+// new name survives a power cut. The caller syncs the bytes of src first.
+func InstallImage(src, file string) error {
+	if err := os.Rename(src, file); err != nil {
+		return err
+	}
+	syncImageDir(file)
+	return nil
 }
 
 // ListDrives returns the drives the gadget has, in LUN order. A gadget in
