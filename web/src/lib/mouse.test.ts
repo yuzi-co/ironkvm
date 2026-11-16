@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { MouseReportRelative } from './mouse.ts';
+import { MouseReportAbsolute, MouseReportRelative } from './mouse.ts';
 
 // signed reads a report byte back as the int8 the host sees.
 function signed(byte: number): number {
@@ -94,4 +94,70 @@ test('a move that rounds to zero still sends one report', () => {
 
   assert.equal(reports.length, 1);
   assert.deepEqual(Array.from(reports[0]), [0, 0, 0, 0, 0]);
+});
+
+// position reads the X and Y of an absolute report back as the host does.
+function position(report: Uint8Array) {
+  return { x: report[1] | (report[2] << 8), y: report[3] | (report[4] << 8) };
+}
+
+test('an absolute position inside the range is sent as it is', () => {
+  const mouse = new MouseReportAbsolute();
+
+  assert.deepEqual(position(mouse.buildReport(0, 0)), { x: 0, y: 0 });
+  assert.deepEqual(position(mouse.buildReport(1, 0x1234)), { x: 1, y: 0x1234 });
+  assert.deepEqual(position(mouse.buildReport(0x7fff, 0x7fff)), { x: 0x7fff, y: 0x7fff });
+});
+
+test('an absolute position past the range is pulled to its edge', () => {
+  const mouse = new MouseReportAbsolute();
+
+  // 0x8000 is what the far edge of the screen maps to. Unclamped it reaches
+  // the host as -32768.
+  assert.deepEqual(position(mouse.buildReport(0x8000, 0x8000)), { x: 0x7fff, y: 0x7fff });
+  assert.deepEqual(position(mouse.buildReport(70000, -5)), { x: 0x7fff, y: 0 });
+  assert.deepEqual(position(mouse.buildReport(NaN, Infinity)), { x: 0, y: 0x7fff });
+});
+
+test('the release report of the absolute mouse is clamped too', () => {
+  const mouse = new MouseReportAbsolute();
+  mouse.buttonDown(0);
+
+  const report = mouse.reset(0x8000, 12);
+  assert.equal(report[0], 0);
+  assert.deepEqual(position(report), { x: 0x7fff, y: 12 });
+});
+
+test('a mouse knows whether the host holds one of its buttons', () => {
+  for (const mouse of [new MouseReportAbsolute(), new MouseReportRelative()]) {
+    assert.equal(mouse.hasPressedButtons, false);
+
+    mouse.buttonDown(0);
+    mouse.buttonDown(2);
+    assert.equal(mouse.hasPressedButtons, true);
+
+    mouse.buttonUp(0);
+    assert.equal(mouse.hasPressedButtons, true);
+
+    mouse.buttonUp(2);
+    assert.equal(mouse.hasPressedButtons, false);
+  }
+});
+
+test('a reset lets go of every button', () => {
+  const absolute = new MouseReportAbsolute();
+  absolute.buttonDown(1);
+  assert.equal(absolute.reset(3, 4)[0], 0);
+  assert.equal(absolute.hasPressedButtons, false);
+
+  const relative = new MouseReportRelative();
+  relative.buttonDown(1);
+  assert.deepEqual(Array.from(relative.reset()), [0, 0, 0, 0, 0]);
+  assert.equal(relative.hasPressedButtons, false);
+});
+
+test('a button the report has no bit for is not held', () => {
+  const mouse = new MouseReportAbsolute();
+  mouse.buttonDown(9);
+  assert.equal(mouse.hasPressedButtons, false);
 });

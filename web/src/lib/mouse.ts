@@ -7,6 +7,10 @@ const MouseButtons = {
   Forward: 1 << 4
 } as const;
 
+// The absolute pointer's X and Y run from 0 to this, the logical maximum in
+// the gadget's report descriptor.
+export const ABSOLUTE_COORD_MAX = 0x7fff;
+
 // Map browser button index to HID bit
 function getMouseButtonBit(button: number): number {
   switch (button) {
@@ -36,6 +40,11 @@ function getMouseButtonBit(button: number): number {
  */
 export class MouseReportRelative {
   private buttons: number = 0;
+
+  // Whether the host has been told a button is down and not yet that it is up.
+  get hasPressedButtons(): boolean {
+    return this.buttons !== 0;
+  }
 
   buttonDown(button: number): void {
     this.buttons |= getMouseButtonBit(button);
@@ -124,6 +133,11 @@ export class MouseReportRelative {
 export class MouseReportAbsolute {
   private buttons: number = 0;
 
+  // Whether the host has been told a button is down and not yet that it is up.
+  get hasPressedButtons(): boolean {
+    return this.buttons !== 0;
+  }
+
   buttonDown(button: number): void {
     this.buttons |= getMouseButtonBit(button);
   }
@@ -134,18 +148,24 @@ export class MouseReportAbsolute {
 
   /**
    * Build absolute mouse report
-   * @param x X position (0.0 to 1.0, normalized)
-   * @param y Y position (0.0 to 1.0, normalized)
+   * @param x X position (0 to 32767)
+   * @param y Y position (0 to 32767)
    * @param wheel Scroll wheel (-127 to 127)
    */
   buildReport(x: number, y: number, wheel: number = 0): Uint8Array {
     const report = new Uint8Array(6);
 
+    // A position past the descriptor's range is pulled to its edge. The
+    // caller's mapping reaches 0x8000 at the far edge of the screen, which
+    // the host reads as a negative number and may discard with its buttons.
+    const positionX = this.clampPosition(x);
+    const positionY = this.clampPosition(y);
+
     report[0] = this.buttons;
-    report[1] = x & 0xff;
-    report[2] = (x >> 8) & 0xff;
-    report[3] = y & 0xff;
-    report[4] = (y >> 8) & 0xff;
+    report[1] = positionX & 0xff;
+    report[2] = (positionX >> 8) & 0xff;
+    report[3] = positionY & 0xff;
+    report[4] = (positionY >> 8) & 0xff;
     report[5] = this.clamp(Math.round(wheel), -127, 127) & 0xff;
 
     return report;
@@ -161,6 +181,11 @@ export class MouseReportAbsolute {
   reset(x: number = 0, y: number = 0): Uint8Array {
     this.buttons = 0;
     return this.buildReport(x, y, 0);
+  }
+
+  // A position that is not a number counts as 0, as it did before the clamp.
+  private clampPosition(value: number): number {
+    return this.clamp(Math.floor(value) || 0, 0, ABSOLUTE_COORD_MAX);
   }
 
   private clamp(value: number, min: number, max: number): number {
