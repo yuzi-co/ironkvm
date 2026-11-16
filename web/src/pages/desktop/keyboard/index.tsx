@@ -9,6 +9,7 @@ import { isKeyboardEnableAtom } from '@/jotai/keyboard.ts';
 import { picoclawTakeoverStateAtom } from '@/jotai/picoclaw.ts';
 
 import { isPasteShortcut, usePaste } from '../paste/use-paste.ts';
+import { isEditableTarget } from './editable-target.ts';
 import { isCompositionKey, ModifierSync } from './input-state.ts';
 import { Recorder } from './recorder.tsx';
 import { useAltGr } from './useAltGr.ts';
@@ -81,11 +82,18 @@ export const Keyboard = () => {
     document.addEventListener('keyup', handleKeyUp);
     document.addEventListener('compositionstart', handleCompositionStart);
     document.addEventListener('compositionend', handleCompositionEnd);
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('pointerdown', handlePointerDown, true);
     window.addEventListener('blur', handleBlur);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     function handleKeyDown(event: KeyboardEvent) {
       if (!isKeyboardEnabled) return;
+      // A field of the page owns the keyboard while it has focus. Forwarding
+      // the key would type it on the host as well, and cancelling its default
+      // would keep it out of the field. This comes before the composition
+      // check, so a key typed into a field never touches the composing flag.
+      if (isEditableTarget(event.target)) return;
       if (isCompositionKey(isComposing.current, event)) return;
       // A keydown the input method is not consuming means any composition is
       // over, whether or not its compositionend reached the document.
@@ -147,6 +155,11 @@ export const Keyboard = () => {
       // pressedKeys its next keydown was suppressed too. One press and the key
       // never worked again.
       const wasPressed = pressedKeys.current.has(code);
+
+      // The keyup of a key typed into a field of the page stays with the
+      // field. One the host still holds is released all the same.
+      if (isEditableTarget(event.target) && !wasPressed) return;
+
       if ((isComposing.current || event.isComposing) && !wasPressed) return;
 
       event.preventDefault();
@@ -178,6 +191,31 @@ export const Keyboard = () => {
 
       pressedKeys.current.delete(code);
       sendKeyEvent('keyup', code);
+    }
+
+    // Focus moving into a field of the page takes the keyups with it: they
+    // land in the field and are not forwarded. Whatever the host still holds
+    // is released now, or a shortcut that opened a dialog would leave its
+    // modifier down on the host for as long as the user types in the dialog.
+    function handleFocusIn(event: FocusEvent) {
+      if (!isKeyboardEnabled) return;
+      if (isEditableTarget(event.target)) {
+        releaseKeys();
+      }
+    }
+
+    // A press on the host screen hands the keyboard back to the host. The
+    // mouse handlers cancel the default of that press, so the browser does
+    // not take the focus out of a field by itself, and the keys would keep
+    // going to a field the user has left.
+    function handlePointerDown(event: PointerEvent) {
+      const screen = document.getElementById('screen');
+      if (!screen || !(event.target instanceof Node) || !screen.contains(event.target)) return;
+
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && isEditableTarget(focused)) {
+        focused.blur();
+      }
     }
 
     function handleCompositionStart() {
@@ -247,6 +285,8 @@ export const Keyboard = () => {
       document.removeEventListener('keyup', handleKeyUp);
       document.removeEventListener('compositionstart', handleCompositionStart);
       document.removeEventListener('compositionend', handleCompositionEnd);
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('pointerdown', handlePointerDown, true);
       window.removeEventListener('blur', handleBlur);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
 
