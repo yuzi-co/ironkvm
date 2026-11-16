@@ -104,6 +104,39 @@ func TestUnhashedFilesAreNotCachedForever(t *testing.T) {
 	}
 }
 
+func TestAMissingAssetIsNotCachedForever(t *testing.T) {
+	// A page loaded while an update is being unpacked asks for a script the
+	// old build does not have. Cached as immutable, that 404 would outlive
+	// the update.
+	dir, _ := webRootWithGzip(t, "assets/app-BRKOgzOS.js", scriptBody)
+	r := newTestEngine(t, dir)
+
+	for _, path := range []string{"/assets/app-Dq3xZ0aa.js", "/assets/", "/assets/../assets/none.js"} {
+		w := getWithEncoding(t, r, path, "gzip")
+
+		if w.Code == http.StatusOK && path != "/assets/" {
+			t.Fatalf("status for %s = %d, want a failure", path, w.Code)
+		}
+		if got := w.Header().Get("Cache-Control"); !strings.Contains(got, "no-store") {
+			t.Fatalf("Cache-Control for %s = %q, want no-store", path, got)
+		}
+	}
+}
+
+func TestAnAssetKeptOnlyCompressedMayBeCachedForever(t *testing.T) {
+	dir, _ := webRootWithGzip(t, "assets/app-BRKOgzOS.js", scriptBody)
+	if err := os.Remove(filepath.Join(dir, "assets", "app-BRKOgzOS.js")); err != nil {
+		t.Fatalf("failed to remove the plain copy: %s", err)
+	}
+	r := newTestEngine(t, dir)
+
+	w := getWithEncoding(t, r, "/assets/app-BRKOgzOS.js", "gzip")
+
+	if got := w.Header().Get("Cache-Control"); !strings.Contains(got, "immutable") {
+		t.Fatalf("Cache-Control = %q, want a long immutable cache", got)
+	}
+}
+
 func TestAPIResponsesAreLeftAlone(t *testing.T) {
 	// The static handler returns before touching an API request; caching
 	// policy for those belongs to the handlers that answer them.
