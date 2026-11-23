@@ -101,6 +101,10 @@ func initialize() {
 	apicontract.SetProbe("slot-install", slot.Available)
 	vm.ApplyVideoClock()
 
+	// Drive the ATX button lines low now, not at the first press
+	// (ironkvm-dist#210).
+	vm.HoldButtonsReleased()
+
 	// init screen parameters
 	_ = common.GetScreen()
 

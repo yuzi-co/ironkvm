@@ -3,6 +3,7 @@ package vm
 import (
 	"errors"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -35,6 +36,55 @@ func TestMissingSysfsLineWithoutANamedLineFailsAsBefore(t *testing.T) {
 	}
 	if _, err := readGpio(conf.GPIOPowerLED); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("readGpio on a missing path = %v, want the not-exist error", err)
+	}
+}
+
+// On the vendor kernel the startup claim leaves the sysfs lines to S15kvmhwd:
+// it neither writes them nor caches a character-device line for them.
+func TestHoldButtonsReleasedLeavesSysfsLinesAlone(t *testing.T) {
+	power, reset, _ := useButtons(t, "0\n")
+	for _, path := range []string{power, reset} {
+		if err := os.WriteFile(path, []byte("1"), 0o600); err != nil {
+			t.Fatalf("failed to seed %s: %s", path, err)
+		}
+	}
+
+	HoldButtonsReleased()
+
+	for _, path := range []string{power, reset} {
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != "1" {
+			t.Fatalf("%s = %q, %v after HoldButtonsReleased, want it untouched", path, got, err)
+		}
+	}
+	assertNoCdevLines(t)
+}
+
+// With no sysfs path and no chip that names the lines, the startup claim is a
+// no-op: the first press still fails the way it did before.
+func TestHoldButtonsReleasedWithoutNamedLinesDoesNothing(t *testing.T) {
+	useNoGpioChips(t)
+	dir := t.TempDir()
+	conf := &config.GetInstance().Hardware
+	old := *conf
+	t.Cleanup(func() { *conf = old })
+	conf.GPIOPower = filepath.Join(dir, "gpio503", "value")
+	conf.GPIOReset = filepath.Join(dir, "gpio505", "value")
+
+	HoldButtonsReleased()
+
+	assertNoCdevLines(t)
+	if err := writeGpio(conf.GPIOPower, time.Millisecond); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("writeGpio after HoldButtonsReleased = %v, want the not-exist error", err)
+	}
+}
+
+func assertNoCdevLines(t *testing.T) {
+	t.Helper()
+	cdevLinesMu.Lock()
+	defer cdevLinesMu.Unlock()
+	if len(cdevLines) != 0 {
+		t.Fatalf("cdevLines = %v, want none", cdevLines)
 	}
 }
 

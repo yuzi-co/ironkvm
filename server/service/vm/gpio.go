@@ -250,6 +250,26 @@ func cdevLine(device string, dir gpiocdev.Direction) *gpiocdev.Line {
 	return l
 }
 
+// HoldButtonsReleased takes the power and reset lines as outputs, driven low,
+// at startup (ironkvm-dist#210).
+//
+// On the vendor kernel S15kvmhwd exports both lines at boot and sets them to
+// out, low, and the sysfs path wins in cdevLine, so this does nothing there.
+// The mainline image refuses S15kvmhwd, and a line was otherwise requested
+// only by the first press. Until then the pad was an input with the SoC's
+// pull-up, and the ATX board saw a weak high on its button inputs. cdevLine
+// requests an output with an initial value of 0 and keeps it, so from here on
+// a line is low except during a press.
+func HoldButtonsReleased() {
+	conf := config.GetInstance().Hardware
+	for _, device := range []string{conf.GPIOPower, conf.GPIOReset} {
+		lock := gpioLock(device)
+		lock.Lock()
+		cdevLine(device, gpiocdev.Output)
+		lock.Unlock()
+	}
+}
+
 func writeGpio(device string, duration time.Duration) error {
 	lock := gpioLock(device)
 	lock.Lock()
